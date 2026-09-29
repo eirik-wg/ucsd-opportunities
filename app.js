@@ -9,7 +9,7 @@ const CONFIG = {
     apiKey: '',            // Personal access token with data.records:read scope
     baseId: '',            // e.g. appXXXXXXXXXXXXXX
     tableName: 'Opportunities',
-    view: 'Top Opportunities'
+    view: 'Website'
   },
   closingSoonDays: 21,
   recentlyClosedDays: 120

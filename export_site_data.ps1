@@ -1,5 +1,6 @@
 $sourcePath = 'C:\Users\eirikat\UCSD GEIR\20260929_Funding opportunities_reviewed.xlsx'
 $outputPath = 'C:\Users\eirikat\UCSD GEIR\data\opportunities.json'
+$airtableCsvPath = 'C:\Users\eirikat\UCSD GEIR\data\airtable_import.csv'
 $maxRows = 80
 
 function Normalize-Text($value) {
@@ -77,6 +78,7 @@ $ws = $wb.Worksheets.Item('Reviewed_2026')
 $lastRow = $ws.UsedRange.Rows.Count
 
 $rows = @()
+$allRows = @()
 for ($r = 2; $r -le $lastRow; $r++) {
     $title = Normalize-Text $ws.Cells.Item($r, 1).Value2
     if (-not $title) { continue }
@@ -102,8 +104,8 @@ for ($r = 2; $r -le $lastRow; $r++) {
     $eligLabel     = Normalize-Text $ws.Cells.Item($r, 26).Value2
     $tier          = Normalize-Text $ws.Cells.Item($r, 28).Value2
 
-    if ($status -match 'inactive|not active|website down') { continue }
-    if ($tier -notin @('Tier 1','Tier 2')) { continue }
+    if ($status -match 'inactive|not active|website down') { $isActive = $false } else { $isActive = $true }
+    $isTopTier = ($tier -in @('Tier 1','Tier 2'))
 
     $estDate = $null
     if ($estRaw -is [double]) { $estDate = [datetime]::FromOADate($estRaw) }
@@ -118,13 +120,14 @@ for ($r = 2; $r -le $lastRow; $r++) {
     $summary = $description
     if ($summary.Length -gt 260) { $summary = $summary.Substring(0, 257).TrimEnd() + '...' }
 
-    $tierRank = if ($tier -eq 'Tier 1') { 1 } else { 2 }
+    $tierRank = if ($tier -eq 'Tier 1') { 1 } elseif ($tier -eq 'Tier 2') { 2 } elseif ($tier -eq 'Tier 3') { 3 } else { 4 }
 
-    $rows += [pscustomobject]@{
+    $allRows += [pscustomobject]@{
         id            = 'opp-' + $r
         title         = $title
         organizer     = Get-Organizer $title $ucsdRun
         summary       = $summary
+        description   = $description
         type          = $type
         fundingModel  = Get-FundingModel $type $text
         amount        = if ($amount) { $amount } else { 'Varies' }
@@ -143,8 +146,13 @@ for ($r = 2; $r -le $lastRow; $r++) {
         ucsdRun       = ($ucsdRun -match '^(yes|y|true|x)$' -or $title -match 'UCSD|UC San Diego')
         eligibility   = Get-Eligibility $openApp $cateredToward $generalNotes $description
         url           = $link
+        status        = if ($status) { $status } else { 'Active' }
+        isActive      = $isActive
+        isTopTier     = $isTopTier
     }
 }
+
+$rows = @($allRows | Where-Object { $_.isActive -and $_.isTopTier } | Select-Object -Property * -ExcludeProperty description, status, isActive, isTopTier)
 
 $wb.Close($false)
 $excel.Quit()
@@ -161,6 +169,38 @@ $payload = [pscustomobject]@{
 New-Item -ItemType Directory -Force -Path (Split-Path $outputPath) | Out-Null
 $json = $payload | ConvertTo-Json -Depth 6
 [System.IO.File]::WriteAllText($outputPath, $json, (New-Object System.Text.UTF8Encoding($false)))
+
+# Airtable import file: every row, field names match scripts/sync-airtable.mjs
+$csvRows = $allRows | ForEach-Object {
+    [pscustomobject]@{
+        'Program Title'               = $_.title
+        'Organizer'                   = $_.organizer
+        'Program Description'         = $_.description
+        'Type'                        = $_.type
+        'Funding Model'               = $_.fundingModel
+        'Funding Amount/Prize Amount' = $_.amount
+        'Estimated Deadline Date'     = $_.deadline
+        'Deadline Kind'               = $_.deadlineKind
+        'Next Deadline'               = $_.deadlineNote
+        'Recurring'                   = $_.recurring
+        'Eligibility Label'           = $_.audience
+        'Geography'                   = $_.geography
+        'Industry'                    = $_.industry
+        'Founder Stage'               = $_.stage
+        'Best For'                    = $_.bestFor
+        'Student Startup Fit'         = $_.fit
+        'Priority Tier'               = $_.tier
+        'UCSD Run'                    = if ($_.ucsdRun) { 'checked' } else { '' }
+        'Eligibility'                 = ($_.eligibility -join "`n")
+        'Website link'                = $_.url
+        'Status'                      = $_.status
+        'Show on Website'             = if ($_.isActive -and $_.isTopTier) { 'checked' } else { '' }
+    }
+}
+$csvText = ($csvRows | ConvertTo-Csv -NoTypeInformation) -join "`r`n"
+[System.IO.File]::WriteAllText($airtableCsvPath, $csvText, (New-Object System.Text.UTF8Encoding($true)))
+
+Write-Host ('All rows: ' + $allRows.Count + ' -> ' + $airtableCsvPath)
 
 Write-Host ('Candidates (Tier 1-2, active): ' + $rows.Count)
 Write-Host ('Exported: ' + $selected.Count + ' -> ' + $outputPath)
