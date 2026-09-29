@@ -1,31 +1,41 @@
 #!/usr/bin/env node
 /**
- * Pull opportunities from Airtable (source of truth) and write data/opportunities.json
- * in the shape consumed by app.js.
+ * Pull opportunities from Airtable (source of truth) and write data/opportunities.dat
+ * (gzip + XOR + base64 payload) in the shape consumed by app.js.
  *
  * Env vars:
  *   AIRTABLE_TOKEN   personal access token, scope data.records:read
  *   AIRTABLE_BASE_ID appXXXXXXXXXXXXXX
  *   AIRTABLE_TABLE   default "Opportunities"
  *   AIRTABLE_VIEW    default "Website" (view should filter Show on Website = checked)
- *   MAX_ROWS         default 80
+ *   MAX_ROWS         default 0 (= no limit)
  */
 import { writeFile, mkdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gzipSync } from 'node:zlib';
 
 const token = process.env.AIRTABLE_TOKEN;
 const baseId = process.env.AIRTABLE_BASE_ID;
 const table = process.env.AIRTABLE_TABLE || 'Opportunities';
 const view = process.env.AIRTABLE_VIEW || 'Website';
-const maxRows = Number(process.env.MAX_ROWS || 80);
+const maxRows = Number(process.env.MAX_ROWS || 0);
+// Must match PAYLOAD_KEY in app.js and $payloadKey in export_site_data.ps1
+const PAYLOAD_KEY = 'ucsd-founder-funding-2026';
 
 if (!token || !baseId) {
   console.error('AIRTABLE_TOKEN and AIRTABLE_BASE_ID are required.');
   process.exit(1);
 }
 
-const outPath = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'data', 'opportunities.json');
+const outPath = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'data', 'opportunities.dat');
+
+function protectPayload(json) {
+  const bytes = gzipSync(Buffer.from(json, 'utf8'));
+  const key = Buffer.from(PAYLOAD_KEY, 'utf8');
+  for (let i = 0; i < bytes.length; i++) bytes[i] ^= key[i % key.length];
+  return 'UCSDF1.' + bytes.toString('base64');
+}
 
 async function fetchAll() {
   const records = [];
@@ -85,11 +95,11 @@ function toOpportunity(r) {
 }
 
 const records = await fetchAll();
-const opportunities = records
+let opportunities = records
   .map(toOpportunity)
   .filter((o) => o.title)
-  .sort((a, b) => a.tierRank - b.tierRank || (a.deadline || '9999-12-31').localeCompare(b.deadline || '9999-12-31'))
-  .slice(0, maxRows);
+  .sort((a, b) => a.tierRank - b.tierRank || (a.deadline || '9999-12-31').localeCompare(b.deadline || '9999-12-31'));
+if (maxRows > 0) opportunities = opportunities.slice(0, maxRows);
 
 const payload = {
   generatedAt: new Date().toISOString(),
@@ -99,5 +109,5 @@ const payload = {
 };
 
 await mkdir(dirname(outPath), { recursive: true });
-await writeFile(outPath, JSON.stringify(payload, null, 2) + '\n', 'utf8');
+await writeFile(outPath, protectPayload(JSON.stringify(payload)), 'utf8');
 console.log(`Fetched ${records.length} records, wrote ${opportunities.length} -> ${outPath}`);

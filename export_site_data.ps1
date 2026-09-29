@@ -1,7 +1,22 @@
 $sourcePath = 'C:\Users\eirikat\UCSD GEIR\20260929_Funding opportunities_reviewed.xlsx'
-$outputPath = 'C:\Users\eirikat\UCSD GEIR\data\opportunities.json'
+$outputPath = 'C:\Users\eirikat\UCSD GEIR\data\opportunities.dat'
 $airtableCsvPath = 'C:\Users\eirikat\UCSD GEIR\data\airtable_import.csv'
-$maxRows = 80
+# Must match PAYLOAD_KEY in app.js and scripts/sync-airtable.mjs
+$payloadKey = 'ucsd-founder-funding-2026'
+
+# gzip -> XOR with key -> base64, prefixed with a format tag. Deters casual scraping of the raw data file;
+# the browser reverses it in app.js (see unprotectPayload).
+function Protect-Payload([string]$json, [string]$key) {
+    $plain = [System.Text.Encoding]::UTF8.GetBytes($json)
+    $ms = New-Object System.IO.MemoryStream
+    $gz = New-Object System.IO.Compression.GZipStream($ms, [System.IO.Compression.CompressionMode]::Compress)
+    $gz.Write($plain, 0, $plain.Length)
+    $gz.Close()
+    $bytes = $ms.ToArray()
+    $k = [System.Text.Encoding]::UTF8.GetBytes($key)
+    for ($i = 0; $i -lt $bytes.Length; $i++) { $bytes[$i] = $bytes[$i] -bxor $k[$i % $k.Length] }
+    return 'UCSDF1.' + [Convert]::ToBase64String($bytes)
+}
 
 function Normalize-Text($value) {
     if ($null -eq $value) { return '' }
@@ -152,12 +167,13 @@ for ($r = 2; $r -le $lastRow; $r++) {
     }
 }
 
-$rows = @($allRows | Where-Object { $_.isActive -and $_.isTopTier } | Select-Object -Property * -ExcludeProperty description, status, isActive, isTopTier)
+# Website payload: every active opportunity, all tiers. The site lets founders choose which tiers to show.
+$rows = @($allRows | Where-Object { $_.isActive } | Select-Object -Property * -ExcludeProperty description, status, isActive, isTopTier)
 
 $wb.Close($false)
 $excel.Quit()
 
-$selected = $rows | Sort-Object -Property @{Expression='tierRank'}, @{Expression={ if ($_.deadline) { $_.deadline } else { '9999-12-31' } }} | Select-Object -First $maxRows
+$selected = @($rows | Sort-Object -Property @{Expression='tierRank'}, @{Expression={ if ($_.deadline) { $_.deadline } else { '9999-12-31' } }})
 
 $payload = [pscustomobject]@{
     generatedAt = (Get-Date).ToString('yyyy-MM-ddTHH:mm:sszzz')
@@ -167,8 +183,8 @@ $payload = [pscustomobject]@{
 }
 
 New-Item -ItemType Directory -Force -Path (Split-Path $outputPath) | Out-Null
-$json = $payload | ConvertTo-Json -Depth 6
-[System.IO.File]::WriteAllText($outputPath, $json, (New-Object System.Text.UTF8Encoding($false)))
+$json = $payload | ConvertTo-Json -Depth 6 -Compress
+[System.IO.File]::WriteAllText($outputPath, (Protect-Payload $json $payloadKey), (New-Object System.Text.UTF8Encoding($false)))
 
 # Airtable import file: every row, field names match scripts/sync-airtable.mjs
 $csvRows = $allRows | ForEach-Object {
@@ -194,7 +210,7 @@ $csvRows = $allRows | ForEach-Object {
         'Eligibility'                 = ($_.eligibility -join "`n")
         'Website link'                = $_.url
         'Status'                      = $_.status
-        'Show on Website'             = if ($_.isActive -and $_.isTopTier) { 'checked' } else { '' }
+        'Show on Website'             = if ($_.isActive) { 'checked' } else { '' }
     }
 }
 $csvText = ($csvRows | ConvertTo-Csv -NoTypeInformation) -join "`r`n"
@@ -202,5 +218,5 @@ $csvText = ($csvRows | ConvertTo-Csv -NoTypeInformation) -join "`r`n"
 
 Write-Host ('All rows: ' + $allRows.Count + ' -> ' + $airtableCsvPath)
 
-Write-Host ('Candidates (Tier 1-2, active): ' + $rows.Count)
+Write-Host ('Active (all tiers): ' + $rows.Count)
 Write-Host ('Exported: ' + $selected.Count + ' -> ' + $outputPath)

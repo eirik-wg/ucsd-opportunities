@@ -42,7 +42,7 @@
         <input id="signupEmail" type="email" placeholder="you@ucsd.edu" autocomplete="email" required />
         <button type="submit">Get deadline alerts</button>
       </form>
-      <p class="hero-note" id="signupNote">Weekly digest of newly opened and closing-soon opportunities. No spam.</p>
+      <p class="hero-note" id="signupNote">Weekly digest of newly opened and closing-soon Tier 1–2 opportunities. Want alerts for a specific search? Filter the database below and choose <strong>Alerts for this view</strong>.</p>
     </div>
   </section>
 
@@ -53,6 +53,7 @@
           <h2>Funding &amp; Pitch Competition Database</h2>
           <p class="section-meta">
             <span id="trackedCount">…</span> opportunities tracked · Updated <span id="updatedAt">…</span>.
+            By default we show the 20 most urgent Tier 1–2 opportunities. Add tiers, change filters or increase the page size to see more.
             Expected dates are projections from previous cycles — always re-check the official page before you apply.
           </p>
         </div>
@@ -69,6 +70,28 @@
             <label for="searchInput">Search</label>
             <input id="searchInput" type="search" placeholder="Search by name, keyword or organizer" />
           </div>
+
+          <fieldset class="field field-tiers" id="tierFieldset">
+            <legend>Priority tier
+              <button type="button" class="help-button" id="tierHelpToggle" aria-expanded="false" aria-controls="tierHelp">What do tiers mean?</button>
+            </legend>
+            <div class="tier-options">
+              <label class="checkbox tier-option"><input type="checkbox" name="tier" value="1" checked /> Tier 1 <span class="count" id="countTier1">0</span></label>
+              <label class="checkbox tier-option"><input type="checkbox" name="tier" value="2" checked /> Tier 2 <span class="count" id="countTier2">0</span></label>
+              <label class="checkbox tier-option"><input type="checkbox" name="tier" value="3" /> Tier 3 <span class="count" id="countTier3">0</span></label>
+              <label class="checkbox tier-option"><input type="checkbox" name="tier" value="4" /> Tier 4 <span class="count" id="countTier4">0</span></label>
+            </div>
+            <div id="tierHelp" class="tier-help" hidden>
+              <p>Every opportunity is scored for <strong>student-startup fit</strong> (student/university focus, non-dilutive money, stage match, support offered) and placed in a tier. Tiers are a starting point, not a verdict — a Tier 3 program in your exact sector can beat a generic Tier 1.</p>
+              <dl class="tier-legend">
+                <div><dt><span class="tier-pill tier-1">Tier 1</span> Excellent fit</dt><dd>Built for student or university founders. Non-dilutive grants, prizes or accelerator funding with a clear stage match. Apply to these first.</dd></div>
+                <div><dt><span class="tier-pill tier-2">Tier 2</span> Strong fit</dt><dd>Students are clearly eligible and competitive, but the program is broader (regional, national or industry-wide) or the award is smaller.</dd></div>
+                <div><dt><span class="tier-pill tier-3">Tier 3</span> Moderate fit</dt><dd>Open to students but not focused on them. Often needs traction, a research base or a specific industry. Worth checking if it matches your sector.</dd></div>
+                <div><dt><span class="tier-pill tier-4">Tier 4</span> Secondary</dt><dd>Loosely related, equity-based, or aimed at later-stage or non-student teams. Included for completeness.</dd></div>
+              </dl>
+            </div>
+          </fieldset>
+
           <div class="field">
             <label for="typeFilter">Funding type</label>
             <select id="typeFilter"><option value="">All types</option></select>
@@ -94,6 +117,15 @@
               <option value="title">Name (A–Z)</option>
             </select>
           </div>
+          <div class="field">
+            <label for="pageSizeSelect">Show</label>
+            <select id="pageSizeSelect">
+              <option value="20">20 per page</option>
+              <option value="50">50 per page</option>
+              <option value="100">100 per page</option>
+              <option value="0">All matching</option>
+            </select>
+          </div>
           <div class="field field-toggle">
             <label class="checkbox"><input type="checkbox" id="ucsdOnly" /> UC San Diego programs only</label>
           </div>
@@ -101,19 +133,64 @@
 
         <div class="results-bar">
           <p id="resultsCount" class="results-count">Loading…</p>
-          <button class="link-button" id="resetFilters" type="button">Reset filters</button>
+          <div class="results-actions">
+            <button class="link-button" id="saveViewBtn" type="button">Save this view</button>
+            <button class="link-button" id="copyLinkBtn" type="button">Copy link</button>
+            <button class="link-button link-button-strong" id="alertsBtn" type="button">Alerts for this view</button>
+            <button class="link-button" id="resetFilters" type="button">Reset</button>
+          </div>
+        </div>
+
+        <form id="saveViewForm" class="save-view-form" hidden>
+          <label for="saveViewName">Name this view</label>
+          <input id="saveViewName" type="text" maxlength="60" placeholder="e.g. Climate grants, prototype stage" required />
+          <button type="submit" class="button button-small">Save</button>
+          <button type="button" class="link-button" id="saveViewCancel">Cancel</button>
+          <span class="form-hint">Saved in this browser only. Use “Copy link” to share or open on another device.</span>
+        </form>
+
+        <div id="savedViews" class="saved-views" hidden>
+          <span class="saved-views-label">Saved views:</span>
+          <div id="savedViewsList" class="saved-views-list"></div>
         </div>
 
         <div id="status" class="status" role="status" aria-live="polite"></div>
         <div id="opportunities" class="cards" aria-live="polite"></div>
+        <div class="pager" id="pager" hidden>
+          <button type="button" class="button button-outline" id="showMoreBtn">Show more</button>
+          <span class="pager-note" id="pagerNote"></span>
+        </div>
+        <p class="usage-note">This list is provided for UC San Diego students and founders to find funding. Automated harvesting, scraping or republishing of the database is not permitted.</p>
       </div>
     </section>
+
+    <dialog id="alertDialog" class="dialog" aria-labelledby="alertDialogTitle">
+      <form id="alertForm" method="dialog" novalidate>
+        <h3 id="alertDialogTitle">Get alerts for this view</h3>
+        <p class="dialog-lead">We will email you when opportunities matching your current filters open, are added, or are about to close.</p>
+        <p class="dialog-summary"><strong>Your view:</strong> <span id="alertViewSummary"></span></p>
+        <label for="alertEmail">Email</label>
+        <input id="alertEmail" type="email" autocomplete="email" placeholder="you@ucsd.edu" required />
+        <fieldset class="dialog-fieldset">
+          <legend>Notify me</legend>
+          <label class="checkbox"><input type="checkbox" name="alertKind" value="weekly" checked /> Weekly digest of matching opportunities</label>
+          <label class="checkbox"><input type="checkbox" name="alertKind" value="deadline" checked /> Deadline reminders (14 and 3 days before)</label>
+          <label class="checkbox"><input type="checkbox" name="alertKind" value="new" /> As soon as a new matching opportunity is added</label>
+        </fieldset>
+        <p class="form-error" id="alertError" role="alert"></p>
+        <div class="dialog-actions">
+          <button type="button" class="link-button" id="alertCancel">Cancel</button>
+          <button type="submit" class="button">Subscribe</button>
+        </div>
+      </form>
+    </dialog>
 
     <section id="how-it-works" class="how">
       <div class="container how-grid">
         <div>
           <h2>How this list is built</h2>
-          <p>Each opportunity is reviewed by the UC San Diego entrepreneurship team and tagged for <strong>student startup fit</strong>, <strong>founder stage</strong>, <strong>eligibility</strong> and <strong>priority tier</strong>. Only Tier 1 and Tier 2 opportunities that are currently active appear on this page.</p>
+          <p>Each opportunity is reviewed by the UC San Diego entrepreneurship team and tagged for <strong>student startup fit</strong>, <strong>founder stage</strong>, <strong>eligibility</strong> and <strong>priority tier</strong>. All active opportunities are in the database; the page opens on Tier 1–2 and the 20 nearest deadlines, and you choose which tiers and how many results to show.</p>
+          <p>Save a view to come back to the same search later, copy its link to share it, or subscribe to alerts so we email you when matching opportunities open or are about to close.</p>
         </div>
         <ul class="how-list">
           <li><span class="badge badge-open">Open</span> Applications are accepted now, or on a rolling basis.</li>
@@ -149,7 +226,7 @@
       </div>
       <div>
         <p class="footer-heading">About this page</p>
-        <p>Data is maintained in the UC San Diego funding opportunities database and published here automatically. Dates marked <em>expected</em> are estimates.</p>
+        <p>Data is maintained in the UC San Diego funding opportunities database and published here automatically. Dates marked <em>expected</em> are estimates. The database is for individual founders; automated harvesting is not permitted.</p>
       </div>
     </div>
     <div class="container footer-legal">
