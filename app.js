@@ -302,6 +302,8 @@ function decorate(o) {
   const deadline = o.deadline ? startOfDay(new Date(o.deadline + 'T00:00:00')) : null;
   const daysLeft = deadline ? Math.round((deadline - today) / DAY) : null;
   const isRolling = o.deadlineKind === 'rolling' || !deadline;
+  // PowerShell unrolls single-element arrays, so a lone eligibility item can arrive as a string.
+  const eligibility = Array.isArray(o.eligibility) ? o.eligibility : (o.eligibility ? [String(o.eligibility)] : []);
 
   let status, badgeClass, badgeText;
   if (isRolling) {
@@ -321,9 +323,10 @@ function decorate(o) {
 
   return Object.assign({}, o, {
     status, badgeClass, badgeText, daysLeft, isRolling,
+    eligibility,
     deadlineDate: deadline,
     amountValue: parseAmount(o.amount),
-    searchText: [o.title, o.organizer, o.summary, o.type, o.bestFor, o.audience, o.industry, o.geography, (o.eligibility || []).join(' ')].join(' ').toLowerCase()
+    searchText: [o.title, o.organizer, o.summary, o.type, o.bestFor, o.audience, o.industry, o.geography, eligibility.join(' ')].join(' ').toLowerCase()
   });
 }
 
