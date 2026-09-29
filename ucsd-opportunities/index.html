@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>UCSD Startup Opportunities</title>
+    <meta
+      name="description"
+      content="Top startup funding, accelerator, and resource opportunities for UCSD student founders."
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="container topbar-inner">
+        <div>
+          <p class="eyebrow">UCSD Startup Ecosystem</p>
+          <h1>Top opportunities for student startups</h1>
+        </div>
+        <a class="button" href="#opportunities">Browse</a>
+      </div>
+    </header>
+
+    <main class="container">
+      <section class="panel controls" aria-label="Opportunity filters">
+        <div class="control-group">
+          <label for="typeFilter">Type</label>
+          <select id="typeFilter">
+            <option value="all">All</option>
+          </select>
+        </div>
+
+        <div class="control-group">
+          <label for="fitFilter">Student fit</label>
+          <select id="fitFilter">
+            <option value="all">All</option>
+            <option value="Excellent">Excellent</option>
+            <option value="Strong">Strong</option>
+            <option value="Moderate">Moderate</option>
+          </select>
+        </div>
+
+        <div class="control-group">
+          <label for="stageFilter">Founder stage</label>
+          <select id="stageFilter">
+            <option value="all">All</option>
+            <option value="Idea">Idea</option>
+            <option value="Prototype">Prototype</option>
+            <option value="Traction">Traction</option>
+            <option value="Any stage">Any stage</option>
+          </select>
+        </div>
+
+        <div class="control-group">
+          <label for="searchInput">Search</label>
+          <input id="searchInput" type="text" placeholder="Search opportunity" />
+        </div>
+      </section>
+
+      <div id="status" class="status" aria-live="polite"></div>
+      <section id="opportunities" class="cards" aria-live="polite"></section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
