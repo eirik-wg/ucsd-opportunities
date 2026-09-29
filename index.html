@@ -1,66 +1,163 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>UCSD Startup Opportunities</title>
-    <meta
-      name="description"
-      content="Top startup funding, accelerator, and resource opportunities for UCSD student founders."
-    />
-    <link rel="stylesheet" href="styles.css" />
-  </head>
-  <body>
-    <header class="topbar">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Student Founder Funding Opportunities | UC San Diego</title>
+  <meta name="description" content="Curated grants, pitch competitions, accelerators and fellowships for UC San Diego student founders. Updated from the UC San Diego opportunities database." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Roboto+Condensed:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#database">Skip to opportunities</a>
+
+  <header class="site-header">
+    <div class="topbar">
       <div class="container topbar-inner">
-        <div>
-          <p class="eyebrow">UCSD Startup Ecosystem</p>
-          <h1>Top opportunities for student startups</h1>
-        </div>
-        <a class="button" href="#opportunities">Browse</a>
+        <a class="brand" href="https://ucsd.edu" target="_blank" rel="noopener">
+          <span class="brand-mark" aria-hidden="true">UC</span>
+          <span class="brand-text"><strong>UC San Diego</strong><span>Student Founder Funding</span></span>
+        </a>
+        <nav class="topnav" aria-label="Primary">
+          <a href="#database">Database</a>
+          <a href="#how-it-works">How it works</a>
+          <a href="#request">Request a listing</a>
+        </nav>
       </div>
-    </header>
+    </div>
+  </header>
 
-    <main class="container">
-      <section class="panel controls" aria-label="Opportunity filters">
-        <div class="control-group">
-          <label for="typeFilter">Type</label>
-          <select id="typeFilter">
-            <option value="all">All</option>
-          </select>
+  <section class="hero">
+    <div class="container hero-inner">
+      <p class="hero-kicker">Non-dilutive funding &amp; pitch competitions</p>
+      <h1>Funding opportunities for UC San Diego student founders</h1>
+      <p class="hero-lead">
+        A curated, continuously reviewed list of grants, competitions, accelerators and fellowships that
+        student-led startups can actually win. Every entry is checked against the official program page,
+        tagged for stage and eligibility, and ranked so the most relevant opportunities surface first.
+      </p>
+      <form class="signup" id="signupForm" action="#" novalidate>
+        <label class="sr-only" for="signupEmail">Email address</label>
+        <input id="signupEmail" type="email" placeholder="you@ucsd.edu" autocomplete="email" required />
+        <button type="submit">Get deadline alerts</button>
+      </form>
+      <p class="hero-note" id="signupNote">Weekly digest of newly opened and closing-soon opportunities. No spam.</p>
+    </div>
+  </section>
+
+  <main>
+    <section id="database" class="database">
+      <div class="container">
+        <div class="section-head">
+          <h2>Funding &amp; Pitch Competition Database</h2>
+          <p class="section-meta">
+            <span id="trackedCount">…</span> opportunities tracked · Updated <span id="updatedAt">…</span>.
+            Expected dates are projections from previous cycles — always re-check the official page before you apply.
+          </p>
         </div>
 
-        <div class="control-group">
-          <label for="fitFilter">Student fit</label>
-          <select id="fitFilter">
-            <option value="all">All</option>
-            <option value="Excellent">Excellent</option>
-            <option value="Strong">Strong</option>
-            <option value="Moderate">Moderate</option>
-          </select>
+        <div class="status-tabs" role="tablist" aria-label="Opportunity status">
+          <button class="tab is-active" role="tab" data-status="open" aria-selected="true">Open now <span class="count" id="countOpen">0</span></button>
+          <button class="tab" role="tab" data-status="upcoming" aria-selected="false">Upcoming / expected <span class="count" id="countUpcoming">0</span></button>
+          <button class="tab" role="tab" data-status="closed" aria-selected="false">Recently closed <span class="count" id="countClosed">0</span></button>
+          <button class="tab" role="tab" data-status="all" aria-selected="false">All <span class="count" id="countAll">0</span></button>
         </div>
 
-        <div class="control-group">
-          <label for="stageFilter">Founder stage</label>
-          <select id="stageFilter">
-            <option value="all">All</option>
-            <option value="Idea">Idea</option>
-            <option value="Prototype">Prototype</option>
-            <option value="Traction">Traction</option>
-            <option value="Any stage">Any stage</option>
-          </select>
+        <div class="toolbar">
+          <div class="field field-search">
+            <label for="searchInput">Search</label>
+            <input id="searchInput" type="search" placeholder="Search by name, keyword or organizer" />
+          </div>
+          <div class="field">
+            <label for="typeFilter">Funding type</label>
+            <select id="typeFilter"><option value="">All types</option></select>
+          </div>
+          <div class="field">
+            <label for="modelFilter">Funding model</label>
+            <select id="modelFilter"><option value="">All models</option></select>
+          </div>
+          <div class="field">
+            <label for="stageFilter">Founder stage</label>
+            <select id="stageFilter"><option value="">Any stage</option></select>
+          </div>
+          <div class="field">
+            <label for="geoFilter">Geography</label>
+            <select id="geoFilter"><option value="">Anywhere</option></select>
+          </div>
+          <div class="field">
+            <label for="sortSelect">Sort by</label>
+            <select id="sortSelect">
+              <option value="deadline">Deadline (soonest first)</option>
+              <option value="relevance">Relevance to UCSD students</option>
+              <option value="amount">Funding amount (highest)</option>
+              <option value="title">Name (A–Z)</option>
+            </select>
+          </div>
+          <div class="field field-toggle">
+            <label class="checkbox"><input type="checkbox" id="ucsdOnly" /> UC San Diego programs only</label>
+          </div>
         </div>
 
-        <div class="control-group">
-          <label for="searchInput">Search</label>
-          <input id="searchInput" type="text" placeholder="Search opportunity" />
+        <div class="results-bar">
+          <p id="resultsCount" class="results-count">Loading…</p>
+          <button class="link-button" id="resetFilters" type="button">Reset filters</button>
         </div>
-      </section>
 
-      <div id="status" class="status" aria-live="polite"></div>
-      <section id="opportunities" class="cards" aria-live="polite"></section>
-    </main>
+        <div id="status" class="status" role="status" aria-live="polite"></div>
+        <div id="opportunities" class="cards" aria-live="polite"></div>
+      </div>
+    </section>
 
-    <script src="app.js"></script>
-  </body>
+    <section id="how-it-works" class="how">
+      <div class="container how-grid">
+        <div>
+          <h2>How this list is built</h2>
+          <p>Each opportunity is reviewed by the UC San Diego entrepreneurship team and tagged for <strong>student startup fit</strong>, <strong>founder stage</strong>, <strong>eligibility</strong> and <strong>priority tier</strong>. Only Tier 1 and Tier 2 opportunities that are currently active appear on this page.</p>
+        </div>
+        <ul class="how-list">
+          <li><span class="badge badge-open">Open</span> Applications are accepted now, or on a rolling basis.</li>
+          <li><span class="badge badge-soon">Closes in 14 days</span> A confirmed deadline is approaching.</li>
+          <li><span class="badge badge-expected">Expected</span> The date is projected from last year's cycle and has not been confirmed yet.</li>
+          <li><span class="badge badge-closed">Closed</span> The most recent cycle has passed; check back for the next round.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="request" class="request">
+      <div class="container request-inner">
+        <h2>Looking for something specific?</h2>
+        <p>Know an opportunity that should be listed, or found an out-of-date deadline? Tell us and we will review it for the next update.</p>
+        <a class="button button-gold" href="mailto:innovation@ucsd.edu?subject=Funding%20opportunity%20suggestion">Suggest an opportunity</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div>
+        <p class="footer-brand">UC San Diego</p>
+        <p>9500 Gilman Drive, La Jolla, CA 92093-0021<br />(858) 534-2230</p>
+      </div>
+      <div>
+        <p class="footer-heading">Resources</p>
+        <ul>
+          <li><a href="https://innovation.ucsd.edu" target="_blank" rel="noopener">Office of Innovation &amp; Commercialization</a></li>
+          <li><a href="https://thebasement.ucsd.edu" target="_blank" rel="noopener">The Basement</a></li>
+          <li><a href="https://rady.ucsd.edu" target="_blank" rel="noopener">Rady School of Management</a></li>
+        </ul>
+      </div>
+      <div>
+        <p class="footer-heading">About this page</p>
+        <p>Data is maintained in the UC San Diego funding opportunities database and published here automatically. Dates marked <em>expected</em> are estimates.</p>
+      </div>
+    </div>
+    <div class="container footer-legal">
+      <p>Copyright © 2026 Regents of the University of California. All rights reserved.</p>
+      <p><a href="https://ucsd.edu/about/terms-of-use.html" target="_blank" rel="noopener">Terms &amp; Conditions</a> · <a href="https://ucsd.edu/about/feedback.html" target="_blank" rel="noopener">Feedback</a></p>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
 </html>
