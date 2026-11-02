@@ -213,6 +213,8 @@ button, input, select { font: inherit; }
 .badge-group { display: flex; gap: 0.4rem; flex-wrap: wrap; }
 
 .card-summary { margin: 0.85rem 0 1rem; color: var(--ucsd-gray-800); }
+.card-summary + .card-notes { margin-top: -0.5rem; }
+.card-notes { margin: 0 0 1rem; color: var(--muted); font-size: 0.9rem; font-style: italic; }
 
 .card-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem 1.5rem; padding: 0.9rem 0; border-top: 1px solid var(--ucsd-gray-200); border-bottom: 1px solid var(--ucsd-gray-200); }
 .fact-label { display: block; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ucsd-gray-600); font-weight: 700; margin-bottom: 0.15rem; }

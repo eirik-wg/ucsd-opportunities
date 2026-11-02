@@ -1,7 +1,7 @@
 /* UC San Diego Student Founder Funding – front-end logic
  * Data source priority:
  *  1. Airtable (source of truth) if CONFIG.airtable.apiKey is set (local testing only)
- *  2. data/opportunities.dat – gzip + XOR + base64 payload written by export_site_data.ps1 / scripts/sync-airtable.mjs
+ *  2. data/opportunities.dat – gzip + XOR + base64 payload written by scripts/sync-airtable.mjs / scripts/build-from-csv.mjs
  */
 const CONFIG = {
   dataUrl: 'data/opportunities.dat',
@@ -263,37 +263,48 @@ async function fetchAirtable() {
     offset = json.offset;
   } while (offset);
 
+  // Same mapping as scripts/opportunity-map.mjs (20261026 Opportunities schema)
+  const join = (v) => (Array.isArray(v) ? v.join(', ') : String(v || '').trim());
   return {
     generatedAt: new Date().toISOString(),
     opportunities: records.map((r) => {
       const f = r.fields;
+      const stages = Array.isArray(f['Stage']) ? f['Stage'] : join(f['Stage']).split(/,\s*/).filter(Boolean);
+      const deadline = join(f['Next Deadline']).slice(0, 10);
+      const affiliation = join(f['Affiliation']);
+      const title = join(f['Program']);
       return {
         id: r.id,
-        title: f['Program Title'] || '',
-        organizer: f['Organizer'] || '',
-        summary: f['Program Description'] || '',
-        type: f['Type'] || '',
-        fundingModel: f['Funding Model'] || 'Non-dilutive',
-        amount: f['Funding Amount/Prize Amount'] || 'Varies',
-        deadline: f['Estimated Deadline Date'] || '',
-        deadlineKind: f['Deadline Kind'] || 'expected',
-        deadlineNote: f['Next Deadline'] || '',
-        recurring: f['Recurring'] || '',
-        audience: f['Eligibility Label'] || '',
-        geography: f['Geography'] || '',
-        industry: f['Industry'] || '',
-        stage: f['Founder Stage'] || '',
-        bestFor: f['Best For'] || '',
-        fit: f['Student Startup Fit'] || '',
-        tier: f['Priority Tier'] || '',
-        tierRank: { 'Tier 1': 1, 'Tier 2': 2, 'Tier 3': 3 }[f['Priority Tier']] || 4,
-        ucsdRun: !!f['UCSD Run'],
-        eligibility: Array.isArray(f['Eligibility']) ? f['Eligibility'] : String(f['Eligibility'] || '').split('\n').filter(Boolean),
-        url: f['Website link'] || ''
+        title,
+        organizer: '',
+        summary: join(f['Description']),
+        notes: join(f['Notes']),
+        type: join(f['Type']),
+        fundingModel: { 'No equity': 'Non-dilutive', Equity: 'Takes equity', 'Not stated': 'Equity not stated' }[f['Equity']] || '',
+        amount: join(f['Funding / Benefit']) || 'Varies',
+        deadline,
+        deadlineKind: { Fixed: 'confirmed', Window: 'confirmed', 'Recurring-estimated': 'expected', Rolling: 'rolling' }[f['Deadline Type']] || (deadline ? 'expected' : 'unknown'),
+        deadlineNote: join(f['Deadline Label']) || join(f['Deadline / Cadence (text)']),
+        recurring: join(f['Recurrence']),
+        audience: f['Student Friendly'] === 'Yes' ? 'Student friendly' : '',
+        geography: affiliation,
+        industry: join(f['Sectors']),
+        stage: ['Idea', 'Prototype', 'Traction'].every((s) => stages.includes(s)) ? 'Any stage' : stages.join(', '),
+        bestFor: '',
+        fit: '',
+        tier: join(f['Tier']),
+        tierRank: { 'Tier 1': 1, 'Tier 2': 2, 'Tier 3': 3 }[f['Tier']] || 4,
+        ucsdRun: affiliation === 'UCSD only' || /\bUCSD\b|UC San Diego/.test(title),
+        recordStatus: join(f['Status']) || 'Active',
+        verifiedOn: join(f['Verified On']).slice(0, 10),
+        eligibility: join(f['Eligibility']).split(/\r?\n|;\s*/).map((s) => s.trim()).filter(Boolean).slice(0, 6),
+        url: (join(f['Website']).match(/https?:\/\/\S+/) || [''])[0].replace(/[;,]$/, '')
       };
     })
   };
 }
+
+const INACTIVE_STATUSES = ['Site down', 'Discontinued', 'Inactive'];
 
 /* ---------------- Derived fields ---------------- */
 
@@ -302,11 +313,17 @@ function decorate(o) {
   const deadline = o.deadline ? startOfDay(new Date(o.deadline + 'T00:00:00')) : null;
   const daysLeft = deadline ? Math.round((deadline - today) / DAY) : null;
   const isRolling = o.deadlineKind === 'rolling' || !deadline;
+  const isInactive = INACTIVE_STATUSES.includes(o.recordStatus);
   // PowerShell unrolls single-element arrays, so a lone eligibility item can arrive as a string.
   const eligibility = Array.isArray(o.eligibility) ? o.eligibility : (o.eligibility ? [String(o.eligibility)] : []);
 
   let status, badgeClass, badgeText;
-  if (isRolling) {
+  if (isInactive) {
+    status = 'closed'; badgeClass = 'badge-closed'; badgeText = o.recordStatus;
+  } else if (isRolling && o.deadlineKind !== 'rolling') {
+    // No deadline researched yet: keep it browsable under "Open now" but don't claim it is rolling.
+    status = 'open'; badgeClass = 'badge-expected'; badgeText = 'Check dates on website';
+  } else if (isRolling) {
     status = 'open'; badgeClass = 'badge-open'; badgeText = 'Open · rolling';
   } else if (daysLeft < 0) {
     status = 'closed'; badgeClass = 'badge-closed';
@@ -323,10 +340,12 @@ function decorate(o) {
 
   return Object.assign({}, o, {
     status, badgeClass, badgeText, daysLeft, isRolling,
+    isInactive,
     eligibility,
+    stages: o.stage === 'Any stage' ? [] : String(o.stage || '').split(/,\s*/).filter(Boolean),
     deadlineDate: deadline,
     amountValue: parseAmount(o.amount),
-    searchText: [o.title, o.organizer, o.summary, o.type, o.bestFor, o.audience, o.industry, o.geography, eligibility.join(' ')].join(' ').toLowerCase()
+    searchText: [o.title, o.organizer, o.summary, o.notes, o.type, o.bestFor, o.audience, o.industry, o.geography, eligibility.join(' ')].join(' ').toLowerCase()
   });
 }
 
@@ -350,7 +369,7 @@ function parseAmount(text) {
 function populateFilters() {
   fillSelect(els.typeFilter, unique(state.all.map((o) => o.type)));
   fillSelect(els.modelFilter, unique(state.all.map((o) => o.fundingModel)));
-  fillSelect(els.stageFilter, unique(state.all.map((o) => o.stage)), ['Idea', 'Prototype', 'Traction', 'Any stage']);
+  fillSelect(els.stageFilter, unique(state.all.flatMap((o) => o.stages)), ['Idea', 'Prototype', 'Traction']);
   fillSelect(els.geoFilter, unique(state.all.map((o) => o.geography)));
 }
 
@@ -371,7 +390,7 @@ function matchesFilters(o) {
   if (!state.tiers.includes(o.tierRank)) return false;
   if (state.type && o.type !== state.type) return false;
   if (state.model && o.fundingModel !== state.model) return false;
-  if (state.stage && o.stage !== state.stage && o.stage !== 'Any stage') return false;
+  if (state.stage && o.stages.length && !o.stages.includes(state.stage)) return false;
   if (state.geo && o.geography !== state.geo) return false;
   if (state.ucsdOnly && !o.ucsdRun) return false;
   if (state.search && !o.searchText.includes(state.search)) return false;
@@ -623,7 +642,7 @@ function buildCard(o) {
     : '';
 
   const deadlineLabel = o.isRolling
-    ? 'Rolling'
+    ? (o.deadlineKind === 'rolling' ? 'Rolling' : 'See website')
     : formatDate(o.deadlineDate);
   const deadlineSub = o.isRolling
     ? escapeHtml(o.deadlineNote || o.recurring || '')
@@ -632,7 +651,7 @@ function buildCard(o) {
   const tags = [
     ['tag-model', o.fundingModel],
     ['', o.audience],
-    ['', o.geography],
+    ['', o.geography && o.geography !== 'Any' ? o.geography : ''],
     ['', o.industry],
     ['', o.stage && o.stage !== 'Any stage' ? o.stage + ' stage' : ''],
     ['tag-fit', o.fit ? o.fit + ' student fit' : '']
@@ -646,10 +665,12 @@ function buildCard(o) {
       '</div>' +
       '<div class="badge-group">' +
         (o.ucsdRun ? '<span class="badge badge-ucsd">UC San Diego</span>' : '') +
+        (o.recordStatus === 'Unverified' ? '<span class="badge badge-closed" title="The program website blocks automated checks; details were not re-confirmed">Unverified</span>' : '') +
         '<span class="badge ' + o.badgeClass + '">' + escapeHtml(o.badgeText) + '</span>' +
       '</div>' +
     '</div>' +
     (o.summary ? '<p class="card-summary">' + escapeHtml(o.summary) + '</p>' : '') +
+    (o.notes ? '<p class="card-notes">' + escapeHtml(o.notes) + '</p>' : '') +
     '<div class="card-facts">' +
       '<div><span class="fact-label">Deadline</span><span class="fact-value">' + escapeHtml(deadlineLabel) + '</span><span class="fact-sub">' + deadlineSub + '</span></div>' +
       '<div><span class="fact-label">Funding / prize</span><span class="fact-value">' + escapeHtml(o.amount || 'Varies') + '</span></div>' +

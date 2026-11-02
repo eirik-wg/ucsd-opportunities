@@ -2,26 +2,25 @@
 /**
  * Pull opportunities from Airtable (source of truth) and write data/opportunities.dat
  * (gzip + XOR + base64 payload) in the shape consumed by app.js.
+ * Field mapping lives in opportunity-map.mjs (20261026 "Opportunities" table schema).
  *
  * Env vars:
  *   AIRTABLE_TOKEN   personal access token, scope data.records:read
  *   AIRTABLE_BASE_ID appXXXXXXXXXXXXXX
  *   AIRTABLE_TABLE   default "Opportunities"
- *   AIRTABLE_VIEW    default "Website" (view should filter Show on Website = checked)
+ *   AIRTABLE_VIEW    default "Website"
  *   MAX_ROWS         default 0 (= no limit)
  */
 import { writeFile, mkdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { gzipSync } from 'node:zlib';
+import { toOpportunity, buildPayload, protectPayload } from './opportunity-map.mjs';
 
 const token = process.env.AIRTABLE_TOKEN;
 const baseId = process.env.AIRTABLE_BASE_ID;
 const table = process.env.AIRTABLE_TABLE || 'Opportunities';
 const view = process.env.AIRTABLE_VIEW || 'Website';
 const maxRows = Number(process.env.MAX_ROWS || 0);
-// Must match PAYLOAD_KEY in app.js and $payloadKey in export_site_data.ps1
-const PAYLOAD_KEY = 'ucsd-founder-funding-2026';
 
 if (!token || !baseId) {
   console.error('AIRTABLE_TOKEN and AIRTABLE_BASE_ID are required.');
@@ -29,13 +28,6 @@ if (!token || !baseId) {
 }
 
 const outPath = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'data', 'opportunities.dat');
-
-function protectPayload(json) {
-  const bytes = gzipSync(Buffer.from(json, 'utf8'));
-  const key = Buffer.from(PAYLOAD_KEY, 'utf8');
-  for (let i = 0; i < bytes.length; i++) bytes[i] ^= key[i % key.length];
-  return 'UCSDF1.' + bytes.toString('base64');
-}
 
 async function fetchAll() {
   const records = [];
@@ -54,60 +46,18 @@ async function fetchAll() {
   return records;
 }
 
-const str = (v) => (v == null ? '' : Array.isArray(v) ? v.join(', ') : String(v).trim());
-const tierRank = (t) => ({ 'Tier 1': 1, 'Tier 2': 2, 'Tier 3': 3 }[t] || 4);
-
-function toOpportunity(r) {
-  const f = r.fields;
-  const description = str(f['Program Description']);
-  const summary = description.length > 260 ? description.slice(0, 257).trimEnd() + '...' : description;
-  const eligibilityRaw = f['Eligibility'];
-  const eligibility = Array.isArray(eligibilityRaw)
-    ? eligibilityRaw.map(str).filter(Boolean)
-    : str(eligibilityRaw).split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
-  const tier = str(f['Priority Tier']);
-  const title = str(f['Program Title']);
-
-  return {
-    id: r.id,
-    title,
-    organizer: str(f['Organizer']),
-    summary,
-    type: str(f['Type']),
-    fundingModel: str(f['Funding Model']) || 'Non-dilutive',
-    amount: str(f['Funding Amount/Prize Amount']) || 'Varies',
-    deadline: str(f['Estimated Deadline Date']).slice(0, 10),
-    deadlineKind: str(f['Deadline Kind']) || 'expected',
-    deadlineNote: str(f['Next Deadline']),
-    recurring: str(f['Recurring']),
-    audience: str(f['Eligibility Label']),
-    geography: str(f['Geography']),
-    industry: str(f['Industry']),
-    stage: str(f['Founder Stage']),
-    bestFor: str(f['Best For']),
-    fit: str(f['Student Startup Fit']),
-    tier,
-    tierRank: tierRank(tier),
-    ucsdRun: Boolean(f['UCSD Run']) || /UCSD|UC San Diego/.test(title),
-    eligibility: eligibility.slice(0, 6),
-    url: str(f['Website link'])
-  };
-}
-
 const records = await fetchAll();
-let opportunities = records
-  .map(toOpportunity)
-  .filter((o) => o.title)
-  .sort((a, b) => a.tierRank - b.tierRank || (a.deadline || '9999-12-31').localeCompare(b.deadline || '9999-12-31'));
-if (maxRows > 0) opportunities = opportunities.slice(0, maxRows);
-
-const payload = {
-  generatedAt: new Date().toISOString(),
-  source: `Airtable ${baseId} / ${table} / ${view}`,
-  count: opportunities.length,
-  opportunities
-};
+if (records.length && !records.some((r) => r.fields && r.fields['Program'])) {
+  // Protects the live site from being emptied when the secrets still point at a base with the old schema.
+  throw new Error(`No "Program" field in ${baseId} / ${table} / ${view}; expected the 20261026 Opportunities schema. Leaving data unchanged.`);
+}
+const payload = buildPayload(records.map((r) => toOpportunity(r.fields, r.id)), `Airtable ${baseId} / ${table} / ${view}`);
+if (!payload.count) throw new Error('Airtable returned no opportunities; leaving data unchanged.');
+if (maxRows > 0) {
+  payload.opportunities = payload.opportunities.slice(0, maxRows);
+  payload.count = payload.opportunities.length;
+}
 
 await mkdir(dirname(outPath), { recursive: true });
 await writeFile(outPath, protectPayload(JSON.stringify(payload)), 'utf8');
-console.log(`Fetched ${records.length} records, wrote ${opportunities.length} -> ${outPath}`);
+console.log(`Fetched ${records.length} records, wrote ${payload.count} -> ${outPath}`);
